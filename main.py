@@ -6,7 +6,7 @@ import pypyodbc connection = pypyodbc.connect('Driver={SQL Server};'
                                               'Database=ichack'
                                               'uid=ichack;pwd=ichack')
 
-# Creates a new row in thte COMMETS database with values from the input tags.
+# Creates a new row in thte COMMENTS database with values from the input tags.
 def newCommentsEntry(tags):
     cursor = connection.cursor()
     user_id, question_val, option1, option2 = tags
@@ -22,38 +22,54 @@ def newCommentsEntry(tags):
                   "timestamp) " +
                   "VALUES (?, ?, ?, ?, 0, ?, 0, ?)")
     Values = [user_id, question_id, question_val, option1, option2, timestamp]
-    cursor.execute(SQLCommand,Values)
+    cursor.execute(SQLCommand, Values)
+    connection.commit()
+    connection.close()
+
+def increment(query, question_id):
+    cursor = connection.cursor()
+    SQLCommand = ("UPDATE COMMENTS " +
+                 "SET ? = ? + 1 " +
+                 "WHERE question_id = ?")
+    Values = [query, query, question_id]
+    cursor.execute(SQLCommand, Values)
     connection.commit()
     connection.close()
 
 # Extracts the given entry from a given question_id
-def extractEntry(target, database, query, value):
+def extractEntry(target, database, query, value): # wtf does this return
     cursor = connection.cursor()
     SQLCommand = ("SELECT ?" +
                   "FROM ?" +
                   "WHERE ? = ?")
     Values = [target, database, query, value]
-    cursoor.execute(SQLCommand,Values)
+    cursor.execute(SQLCommand, Values)
+    connection.commit()
+    connection.close()
+
+def exists(username): # wtf does this return
+    cursor = connection.cursor()
+    SQLCommand = ("IF EXITS (SELECT * FROM COMMENTS " +
+                  "WHERE username = ?)")
+    Values = [username]
+    cursor.execute(SQLCommand, Values)
     connection.commit()
     connection.close()
 
 def parse(url):
     tags = url.split('?')
     queryType = tags[0]
-    if (queryType == askq):
-        selection, username = tags
-        if (selection == getOption0()): #Make sure Isaac formats this correctly
-                SQLCommand = ("UPDATE COMMENTS " +
-                      "SET count1 = count1 + 1" +
-                      "WHERE question_val = ?"
-        Values = [option0, option1, ]
+    if (queryType == ansQuestion):
+        question_id, selection, username = tags[1:]
+        implement(selection, question_id)
     elif (queryType == authenticate):
-        username, password = tags
-        SQLCommand = ("UPDATE USERS" +
-                      "(user_id," +
-                      "username," +
-                      "password) " +
-                      "VALUES (?,?,?)")
+        username, pwd = tags[1:] # formatting must be correct
+        if not (exists(username) &&
+                pwd == extractEntry("password",
+                                    "COMMENTS",
+                                    "username",
+                                    username)):
+            raise
     else:
         try:
             urllib2.urlopen("some url")
