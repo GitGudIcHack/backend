@@ -41,4 +41,3 @@ def main(string):
         return separateWithOr(nouns)
     else:
         return ('Yes', 'No')
-        
