@@ -1,4 +1,4 @@
-import topiaAllFiles.src.topia.termextract.tag
+from topia.termextract import tag
 
 tagger = tag.Tagger()
 tagger.initialize()

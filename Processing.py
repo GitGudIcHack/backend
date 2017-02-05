@@ -1,81 +1,120 @@
+### CREATED BY JUN YOUNG ON 2016-02-04 FOR GITGUDDECISIONS.
+### NAME IS A WORKING PROJECT NAME.
+
+# Used for creating json strings to be parsed back to the website
 import json
-import datetime
-import os
-import QuestionProcessing
-import pypyodbc
+# Used for retrieving the URL from the server.
+import urlparse
+# import QuestionProcessing
+import MySQLdb # Will need to import to web server.
 
-connection = pypyodbc.connect('Driver={SQL Server};'
-                                              'Server=mhutti1.eu;'
-                                              'Database=ichack'
-                                              'uid=ichack;pwd=ichack')
+headingsCOMMENTS = ['user_id'
+                   ,'question_val'
+                   ,'option1'
+                   ,'count1'
+                   ,'option2'
+                   ,'count2'
+                   ]
 
-def parseQuestion(question):
-    option1, option2 = QuestionProcessing.main(question)
-    return [option1, option2]
+headingsUSERS = ['user_id'
+                ,'username'
+                ,'password'
+                ]
 
-# Creates a new row in thte COMMENTS database with values from the input tags.
+# Open the database connection
+db = MySQLdb.connect(host='mhutti1.eu', # check this info
+                     user='ichack',
+                     passwd='ichack',
+                     db='ichack')
+
+# prepare a cursor object using cursor() method.
+cursor = db.cursor()
+
+
+# A half-assed implementation to avoid major bugs from len(options) < 2 case
+#def parseQuestion(question):
+#    options = QuestionProcessing.main(question)
+#    if len(options) > 1:
+#        return options
+#    return ["Yes", "No"]
+
+# Creates a new row in the COMMENTS database with values from the input tags.
 def newCommentsEntry(tags):
-    cursor = connection.cursor()
-    user_id, question_val, option1, option2 = tags
-    timestamp = datetime.datetime.now() # What to do about this formatting?]
-    SQLCommand = ("INSERT INTO COMMENTS " +
-                  "(user_id," +
-                  "question_id" +
-                  "question_val" +
-                  "option1" +
-                  "count1" +
-                  "option2" +
-                  "count2" +
-                  "timestamp) " +
-                  "VALUES (?, ?, ?, ?, 0, ?, 0, ?)")
-    Values = [user_id, question_id, question_val, option1, option2, timestamp]
-    cursor.execute(SQLCommand, Values)
-    connection.commit()
-    connection.close()
+    user_id, question_val, option1, option2 = tags # Change once Ilyas done.
+    sql = "INSERT INTO COMMENTS \
+           (user_id, \
+           question_id, \
+           question_val, \
+           option1, \
+           count1, \
+           option2, \
+           count2) \
+           VALUES (%s, %s, %s, %s, 0, %s, 0, %d)" % (user_id,
+                                                     question_id,
+                                                     question_val,
+                                                     option1,
+                                                     count1,
+                                                     option2,
+                                                     count2)
+    try:
+        cursor.execute(sql)
+        db.commit()
+    except:
+        db.rollback()
 
+# Increments the cell reference (x,y) : x = question_id; y = query by +1.
 def increment(query, question_id):
-    cursor = connection.cursor()
-    SQLCommand = ("UPDATE COMMENTS " +
-                 "SET ? = ? + 1 " +
-                 "WHERE question_id = ?")
-    Values = [query, query, question_id]
-    cursor.execute(SQLCommand, Values)
-    connection.commit()
-    connection.close()
+    sql = "UPDATE COMMENTS \
+           SET %s = %s + 1 \
+           WHERE question_id = %s" % (query, query, question_id)
+    try:
+        cursor.execute(sql)
+        db.commit()
+    except:
+        db.rollback()
 
-    # Extracts the given entry from a field (query) that takes a particular
-    # value, and returns the target field of that row.
-def extractEntry(target, database, query, value): # wtf does this return
-    cursor = connection.cursor()
-    SQLCommand = ("SELECT ? " +
-                  "FROM ? " +
-                  "WHERE ? = ?")
-    Values = [target, database, query, value]
-    cursor.execute(SQLCommand, Values)
-    connection.commit()
-    connection.close()
+def findTarget(database, target, resultRow):
+    if (database == 'COMMENTS'):
+        try:
+            return resultRow[headingsCOMMENTS.index(target)]
+        except:
+            raise
+    elif (database == 'USERS'):
+        try:
+            return resultRow[headingsUSERS.index(target)]
+        except:
+            raise
+    else:
+        raise
 
-def exists(username): # wtf does this return
-    cursor = connection.cursor()
-    SQLCommand = ("IF EXITS (SELECT * FROM COMMENTS " +
-                  "WHERE username = ?)")
-    Values = [username]
-    cursor.execute(SQLCommand, Values)
-    connection.commit()
-    connection.close()
+# Extracts the given entry from a field (query) that takes a particular
+# value, and returns the target field of that row.
+def extractEntry(target, database, query, queryValue):
+    sql = "SELECT * FROM %s \
+           WHERE %s = %s" (database, query, queryValue)
+    try:
+        cursor.execute(sql)
+        resultRow = cursor.fetchone()
+        return findTarget(database, target, resultRow)
+    except:
+        db.rollback()
+        raise
+
+def exists(username):
+    sql = "SELECT * FROM COMMENTS \
+           WHERE username = %s" % (username)
+    try:
+        cursor.execute(sql)
+        results = cursor.fetchall()
+        return (len(results) != 0)
+    except:
+        db.rollback()
+        return False
 
 def returnJson(question_id):
-    rtnTypes = ['user_id'
-                ,'question_val'
-                ,'option1'
-                ,'count1'
-                ,'option2'
-                ,'count2'
-                'timestamp'
-                ]
     rtnVals = []
-    for rtn in rtntypes:
-        rtnVals.add(extractEntry(rtn, 'COMMENTS', 'question_id', question_id))
+    for heading in headingsCOMMENTS:
+        rtnVals.add(extractEntry(heading, 'COMMENTS', 'question_id', question_id))
     rtn = {'user_id': rtnVals[0]
            ,'question_id': question_id
            ,'question_val': rtnVals[1]
@@ -83,26 +122,26 @@ def returnJson(question_id):
            ,'count1': rtnVals[3]
            ,'option2': rtnVals[4]
            ,'count2': rtnVals[5]
-           ,'timestamp': rtnVals[6]
            }
-    return rtn
+    return json.dumps(rtn, ensure_ascii=False)
 
 def parse(url):
-    tags = url.split('?') # What about formatting with =
-    queryType = tags[0]
+    tags = url.split('?') # keep in mind not to use =
+    queryType = tags[1]
     if (queryType == ansQ):
-        question_id, selection, username = tags[1:]
+        question_id, selection, username = tags[2:]
         increment(selection, question_id)
-
-    elif (queryType == authenticate):
-        username, pwd = tags[1:] # formatting must be correct
-        if not exists(username) and pwd == extractEntry('password',
+    elif (queryType == makeQ):
+        newCommentsEntry(tags[2:])
+    elif queryType == authenticate:
+        username, pwd = tags[2:] # formatting must be correct
+        if not (exists(username) and pwd == extractEntry('password',
                                     'COMMENTS',
                                     'username',
-                                    username):
+                                    username)):
             raise
     elif (queryType == get):
-        question_id = tags[1]
+        question_id = tags[2]
         returnJson(question_id)
     else:
         try:
@@ -110,6 +149,6 @@ def parse(url):
         except urllib2.HTTPError as err:
             raise
 
-url = "http://www.website.com/?ansQ?option1?boris"
-# url = os.environ["REQUEST_URI"]
-print parse(url) # change this line as necessary
+# url = "http://www.website.com/?ansQ?option1?boris"
+url = urlparse.parse_qs(urlparse.urlparse(self.path).query).get('imsi', None)
+db.close()
