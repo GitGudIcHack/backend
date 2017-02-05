@@ -41,8 +41,4 @@ def main(string):
         return separateWithOr(nouns)
     else:
         return ('Yes', 'No')
-
-print main("Should I got to World-Championship today or Tesco tomorrow?")
-print main("should I break up with my boyfriend and his brother?")
-print main("UCL or Imperial")
-print main("Should I got to Andrew's house today or Tesco tomorrow?")
+        
