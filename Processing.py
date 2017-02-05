@@ -8,18 +8,12 @@ import urlparse
 # import QuestionProcessing
 import MySQLdb # Will need to import to web server.
 
-headingsCOMMENTS = ['user_id'
-                   ,'question_val'
+headingsCOMMENTS = ['question_val'
                    ,'option1'
                    ,'count1'
                    ,'option2'
                    ,'count2'
                    ]
-
-headingsUSERS = ['user_id'
-                ,'username'
-                ,'password'
-                ]
 
 # Open the database connection
 db = MySQLdb.connect(host='mhutti1.eu', # check this info
@@ -40,17 +34,15 @@ cursor = db.cursor()
 
 # Creates a new row in the COMMENTS database with values from the input tags.
 def newCommentsEntry(tags):
-    user_id, question_val, option1, option2 = tags # Change once Ilyas done.
+    question_val, option1, option2 = tags # Change once Ilyas done.
     sql = "INSERT INTO COMMENTS \
-           (user_id, \
            question_id, \
            question_val, \
            option1, \
            count1, \
            option2, \
            count2) \
-           VALUES (%s, %s, %s, %s, 0, %s, 0, %d)" % (user_id,
-                                                     question_id,
+           VALUES (%s, %s, %s, %s, 0, %s, 0, %d)" % (question_id,
                                                      question_val,
                                                      option1,
                                                      count1,
@@ -73,50 +65,30 @@ def increment(query, question_id):
     except:
         db.rollback()
 
-def findTarget(database, target, resultRow):
-    if (database == 'COMMENTS'):
-        try:
-            return resultRow[headingsCOMMENTS.index(target)]
-        except:
-            raise
-    elif (database == 'USERS'):
-        try:
-            return resultRow[headingsUSERS.index(target)]
-        except:
-            raise
-    else:
+def findTarget(target, resultRow):
+    try:
+        return resultRow[headingsCOMMENTS.index(target)]
+    except:
         raise
 
 # Extracts the given entry from a field (query) that takes a particular
 # value, and returns the target field of that row.
-def extractEntry(target, database, query, queryValue):
-    sql = "SELECT * FROM %s \
-           WHERE %s = %s" (database, query, queryValue)
+def extractEntry(target, query, queryValue):
+    sql = "SELECT * FROM COMMENTS \
+           WHERE %s = %s" (query, queryValue)
     try:
         cursor.execute(sql)
         resultRow = cursor.fetchone()
-        return findTarget(database, target, resultRow)
+        return findTarget(target, resultRow)
     except:
         db.rollback()
         raise
 
-def exists(username):
-    sql = "SELECT * FROM COMMENTS \
-           WHERE username = %s" % (username)
-    try:
-        cursor.execute(sql)
-        results = cursor.fetchall()
-        return (len(results) != 0)
-    except:
-        db.rollback()
-        return False
-
 def returnJson(question_id):
     rtnVals = []
     for heading in headingsCOMMENTS:
-        rtnVals.add(extractEntry(heading, 'COMMENTS', 'question_id', question_id))
-    rtn = {'user_id': rtnVals[0]
-           ,'question_id': question_id
+        rtnVals.add(extractEntry(heading, 'question_id', question_id))
+    rtn = {'question_id': question_id
            ,'question_val': rtnVals[1]
            ,'option1': rtnVals[2]
            ,'count1': rtnVals[3]
@@ -125,22 +97,29 @@ def returnJson(question_id):
            }
     return json.dumps(rtn, ensure_ascii=False)
 
+def genNewID():
+    sql = "MAX(question_id) \
+           AS HighestID \
+           FROM COMMENTS"
+    try:
+        cursor.execute(sql)
+        results = cursor.fetchone()
+        return results + 1
+    except:
+        return 0
+
 def parse(url):
     tags = url.split('?') # keep in mind not to use =
     queryType = tags[1]
     if (queryType == ansQ):
-        question_id, selection, username = tags[2:]
+        question_val, selection = tags[2:]
+        question_id = extractEntry('question_id',
+                                   'question_val',
+                                   question_val)
         increment(selection, question_id)
-    elif (queryType == makeQ):
+    elif queryType == makeQ:
         newCommentsEntry(tags[2:])
-    elif queryType == authenticate:
-        username, pwd = tags[2:] # formatting must be correct
-        if not (exists(username) and pwd == extractEntry('password',
-                                    'COMMENTS',
-                                    'username',
-                                    username)):
-            raise
-    elif (queryType == get):
+    elif queryType == get:
         question_id = tags[2]
         returnJson(question_id)
     else:
